@@ -1,6 +1,7 @@
 package org.vanbart;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -11,7 +12,10 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.log4j.Logger;
 import org.eclipse.jetty.websocket.WebSocket;
 import org.eclipse.jetty.websocket.WebSocketServlet;
+import org.fusesource.mqtt.client.BlockingConnection;
 import org.fusesource.mqtt.client.MQTT;
+import org.fusesource.mqtt.client.QoS;
+import org.fusesource.mqtt.client.Topic;
 
 /**
  * {@inheritDoc}
@@ -28,11 +32,31 @@ public class MqttRelayServlet extends WebSocketServlet {
 
     private MQTT mqtt;
 
+    private BlockingConnection blockingConnection;
+
     @Override
     public void init() throws ServletException {
         super.init();
         LOGGER.debug("init");
+        String topic = getInitParameter("topic");
+        mqtt = new MQTT();
+        try {
+            mqtt.setHost("localhost", 1883);
+            blockingConnection = mqtt.blockingConnection();
+            LOGGER.debug("Connecting....");
+            blockingConnection.connect();
+            LOGGER.debug("Connected.");
+            Topic[] topics = { new Topic(topic, QoS.AT_LEAST_ONCE)};
+            byte[] qOses = blockingConnection.subscribe(topics);
+            LOGGER.debug("MQTT connected and subscribed to topic '"+topic+"'.");
 
+        } catch (URISyntaxException e) {
+            LOGGER.error("Error setting MQTT host: "+e.getMessage(),e);
+            throw new ServletException(e);
+        } catch (Exception e) {
+            LOGGER.error("Error on MQTT connect: "+e.getMessage(),e);
+            throw new ServletException(e);
+        }
     }
 
     protected void doGet(HttpServletRequest request,

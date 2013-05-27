@@ -2,6 +2,7 @@ package org.vanbart;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.Date;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -14,7 +15,6 @@ import org.eclipse.jetty.websocket.WebSocket;
 import org.eclipse.jetty.websocket.WebSocketServlet;
 import org.fusesource.hawtbuf.Buffer;
 import org.fusesource.hawtbuf.UTF8Buffer;
-import org.fusesource.mqtt.client.BlockingConnection;
 import org.fusesource.mqtt.client.Callback;
 import org.fusesource.mqtt.client.CallbackConnection;
 import org.fusesource.mqtt.client.Listener;
@@ -27,52 +27,41 @@ import org.fusesource.mqtt.client.Topic;
  * Servlet to relay MQTT messages over WebSocket.
  */
 public class MqttRelayServlet extends WebSocketServlet {
-
+    /** log4J logger instance. */
     private static final Logger LOGGER = Logger.getLogger(MqttRelayServlet.class);
 
     private static final long serialVersionUID = -7289719281366784056L;
-    public static String newLine = System.getProperty("line.separator");
-
-    private final Set<RelaySocket> _members = new CopyOnWriteArraySet<RelaySocket>();
+    /** the set of connected WebSockets */
+    private final Set<RelaySocket> connectedSockets = new CopyOnWriteArraySet<RelaySocket>();
+    /** server name we listen to, see web.xml init-param 'host'*/
+    private String mqttHost;
+    /** topic name to listen to, see web.xml init-param 'topic'*/
+    private String mqttTopic;
 
     private MQTT mqtt;
-
-    private BlockingConnection blockingConnection;
 
     @Override
     public void init() throws ServletException {
         super.init();
         LOGGER.debug("init");
-        String topic = getInitParameter("topic");
-        String host = getInitParam("host", "localhost");
+        mqttTopic = getInitParam("topic","TT");
+        mqttHost = getInitParam("host", "localhost");
         mqtt = new MQTT();
         try {
-            mqtt.setHost(host, 1883);
+            mqtt.setHost(mqttHost, 1883);
             CallbackConnection connection = mqtt.callbackConnection();
             connection.listener(new TestConnectionListener());
             connection.connect(new TestConnectionCallback(connection));
-/*
-//          Initial test: final code should *not* use blocking I/O but callback style!
-
-            blockingConnection = mqtt.blockingConnection();
-            LOGGER.debug("Connecting to "+host+"....");
-            blockingConnection.connect();
-            LOGGER.debug("Connected.");
-            Topic[] topics = { new Topic(topic, QoS.AT_LEAST_ONCE)};
-            byte[] qOses = blockingConnection.subscribe(topics);
-            LOGGER.debug("MQTT connected and subscribed to topic '"+topic+"'.");
-            Message message = blockingConnection.receive();
-            LOGGER.info("Received message ["+new String(message.getPayload())+"]");
-            message.ack();
-*/
 
         } catch (URISyntaxException e) {
             LOGGER.error("Error setting MQTT host: "+e.getMessage(),e);
             throw new ServletException(e);
+
         } catch (Exception e) {
             LOGGER.error("Error on MQTT connect: "+e.getMessage(),e);
             throw new ServletException(e);
         }
+        LOGGER.info("Init successful, listening to topic '"+mqttTopic+"' on host '"+mqttHost+"'");
     }
 
     /**
@@ -90,8 +79,7 @@ public class MqttRelayServlet extends WebSocketServlet {
     public WebSocket doWebSocketConnect(HttpServletRequest request,
             String protocol) {
         LOGGER.debug("doWebSocketConnect");
-        RelaySocket tailorSocket = new RelaySocket();
-        return tailorSocket;
+        return new RelaySocket();
     }
 
     private String getInitParam(String name, String defaultValue)  {
@@ -103,6 +91,9 @@ public class MqttRelayServlet extends WebSocketServlet {
         return result;
     }
 
+    /**
+     * Inner class which listens to MQTT message events.
+     */
     class TestConnectionListener implements Listener {
         private Logger LOG = Logger.getLogger(TestConnectionListener.class);
 
@@ -118,9 +109,16 @@ public class MqttRelayServlet extends WebSocketServlet {
 
         @Override
         public void onPublish(UTF8Buffer topic, Buffer payload, Runnable ack) {
-            LOG.debug("onPublish(...)");
-            LOG.info("topic=["+new String(topic.getData())+"]");
-            LOG.info("payload=[" + new String(payload.toByteArray()) + "]");
+            String topicName = topic.toString();
+            String message = new String(payload.toByteArray());
+            LOG.debug("MQTT receive: topic='" + topicName + "', message='" + message + "'");
+            for (RelaySocket relaySocket : connectedSockets) {
+                try {
+                    relaySocket.sendMessage(message);
+                } catch (IOException e) {
+                    LOG.error("Error sending message to "+relaySocket+": "+e.getMessage(), e);
+                }
+            }
             ack.run();
         }
 
@@ -130,6 +128,9 @@ public class MqttRelayServlet extends WebSocketServlet {
         }
     }
 
+    /**
+     * Inner class which handles MQTT connection events.
+     */
     class TestConnectionCallback implements Callback<Void> {
 
         private Logger LOG = Logger.getLogger(TestConnectionCallback.class);
@@ -142,11 +143,11 @@ public class MqttRelayServlet extends WebSocketServlet {
 
         @Override
         public void onSuccess(Void aVoid) {
-            Topic[] topics = { new Topic("TT", QoS.AT_LEAST_ONCE)};
+            Topic[] topics = { new Topic(mqttTopic, QoS.AT_LEAST_ONCE)};
             connection.subscribe(topics, new Callback<byte[]>() {
                 @Override
                 public void onSuccess(byte[] bytes) {
-                    LOG.info("Successfully subscribed to topics");
+                    LOG.info("Successfully subscribed to topic "+mqttTopic);
                 }
 
                 @Override
@@ -163,13 +164,14 @@ public class MqttRelayServlet extends WebSocketServlet {
     }
 
     /**
+     * Inner WebSocket connection handler.
      * {@inheritDoc}
      */
     class RelaySocket implements WebSocket.OnTextMessage {
 
         private final Logger LOGGER = Logger.getLogger(RelaySocket.class);
 
-        private Connection _connection;
+        private Connection connection;
 
         public RelaySocket() {
             LOGGER.debug("create");
@@ -177,11 +179,12 @@ public class MqttRelayServlet extends WebSocketServlet {
 
         @Override
         public void onClose(int closeCode, String message) {
-            _members.remove(this);
+            LOGGER.debug("onClose("+closeCode+","+message+")");
+            connectedSockets.remove(this);
         }
 
         public void sendMessage(String data) throws IOException {
-            _connection.sendMessage(data);
+            connection.sendMessage(data);
         }
 
         @Override
@@ -190,16 +193,16 @@ public class MqttRelayServlet extends WebSocketServlet {
         }
 
         public boolean isOpen() {
-            return _connection.isOpen();
+            return connection.isOpen();
         }
 
         @Override
         public void onOpen(Connection connection) {
             LOGGER.debug("onOpen");
-            _members.add(this);
-            _connection = connection;
+            connectedSockets.add(this);
+            this.connection = connection;
             try {
-                connection.sendMessage("Server received Web Socket upgrade and added it to Receiver List.");
+                connection.sendMessage(new Date().toString()+" websocket connected and added to receiver list.");
             } catch (IOException e) {
                 e.printStackTrace();
             }

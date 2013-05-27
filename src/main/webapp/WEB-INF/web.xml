@@ -21,13 +21,22 @@
         <load-on-startup>0</load-on-startup>
     </servlet>
 
+    <!-- prevent file save errors in IntelliJ when mvn jetty:run is running -->
+    <servlet>
+        <servlet-name>default</servlet-name>
+        <init-param>
+            <param-name>useFileMappedBuffer</param-name>
+            <param-value>false</param-value>
+        </init-param>
+    </servlet>
+
     <servlet-mapping>
         <servlet-name>RelayServlet</servlet-name>
         <url-pattern>/relay/*</url-pattern>
     </servlet-mapping>
 
     <welcome-file-list>
-        <welcome-file>test.html</welcome-file>
+        <welcome-file>relay.html</welcome-file>
     </welcome-file-list>
 
 </web-app>

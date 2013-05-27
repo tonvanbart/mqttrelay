@@ -1,0 +1,29 @@
+<html>
+<head>
+    <title>MQTT relay servlet</title>
+    <script type="text/javascript" src="js/relay.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/relay.css" />
+</head>
+<body>
+Messages received from server:
+<div id='messageBox'></div>
+<div id='input'>
+    <div>
+        <input id='connect' class='button' type='submit' name='Connect'
+               value='Connect' />
+    </div>
+</div>
+<script type='text/javascript'>
+    document.getElementById('connect').onclick = function(event) {
+        server.connect();
+        return false;
+    };
+</script>
+
+<p>
+    This is a demonstration of a Jetty MQTT to WebSocket relay servlet.<br>
+    If you click "connect", any MQTT messages published on topic "TT" should show up in the message box
+    on this page.
+</p>
+</body>
+</html>

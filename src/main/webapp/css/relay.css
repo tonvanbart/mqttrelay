@@ -1,0 +1,30 @@
+div {
+    border: 0px solid black;
+}
+
+div#messageBox {
+    clear: both;
+    width: 40em;
+    height: 20ex;
+    overflow: auto;
+    background-color: #f0f0f0;
+    padding: 4px;
+    border: 1px solid black;
+}
+
+div#input {
+    clear: both;
+    width: 40em;
+    padding: 4px;
+    background-color: #e0e0e0;
+    border: 1px solid black;
+    border-top: 0px
+}
+
+div.hidden {
+    display: none;
+}
+
+span.alert {
+    font-style: italic;
+}

@@ -12,7 +12,12 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.log4j.Logger;
 import org.eclipse.jetty.websocket.WebSocket;
 import org.eclipse.jetty.websocket.WebSocketServlet;
+import org.fusesource.hawtbuf.Buffer;
+import org.fusesource.hawtbuf.UTF8Buffer;
 import org.fusesource.mqtt.client.BlockingConnection;
+import org.fusesource.mqtt.client.Callback;
+import org.fusesource.mqtt.client.CallbackConnection;
+import org.fusesource.mqtt.client.Listener;
 import org.fusesource.mqtt.client.MQTT;
 import org.fusesource.mqtt.client.QoS;
 import org.fusesource.mqtt.client.Topic;
@@ -39,16 +44,27 @@ public class MqttRelayServlet extends WebSocketServlet {
         super.init();
         LOGGER.debug("init");
         String topic = getInitParameter("topic");
+        String host = getInitParam("host", "localhost");
         mqtt = new MQTT();
         try {
-            mqtt.setHost("localhost", 1883);
+            mqtt.setHost(host, 1883);
+            CallbackConnection connection = mqtt.callbackConnection();
+            connection.listener(new TestConnectionListener());
+            connection.connect(new TestConnectionCallback(connection));
+/*
+//          Initial test: final code should *not* use blocking I/O but callback style!
+
             blockingConnection = mqtt.blockingConnection();
-            LOGGER.debug("Connecting....");
+            LOGGER.debug("Connecting to "+host+"....");
             blockingConnection.connect();
             LOGGER.debug("Connected.");
             Topic[] topics = { new Topic(topic, QoS.AT_LEAST_ONCE)};
             byte[] qOses = blockingConnection.subscribe(topics);
             LOGGER.debug("MQTT connected and subscribed to topic '"+topic+"'.");
+            Message message = blockingConnection.receive();
+            LOGGER.info("Received message ["+new String(message.getPayload())+"]");
+            message.ack();
+*/
 
         } catch (URISyntaxException e) {
             LOGGER.error("Error setting MQTT host: "+e.getMessage(),e);
@@ -59,17 +75,91 @@ public class MqttRelayServlet extends WebSocketServlet {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     protected void doGet(HttpServletRequest request,
             HttpServletResponse response) throws ServletException, IOException {
         getServletContext().getNamedDispatcher("default").forward(request,
                 response);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public WebSocket doWebSocketConnect(HttpServletRequest request,
             String protocol) {
         LOGGER.debug("doWebSocketConnect");
         RelaySocket tailorSocket = new RelaySocket();
         return tailorSocket;
+    }
+
+    private String getInitParam(String name, String defaultValue)  {
+        String result = getInitParameter(name);
+        if (result == null) {
+            LOGGER.info("Init parameter '" + name + "' not specified, defaulting to '"+defaultValue+"'");
+            return defaultValue;
+        }
+        return result;
+    }
+
+    class TestConnectionListener implements Listener {
+        private Logger LOG = Logger.getLogger(TestConnectionListener.class);
+
+        @Override
+        public void onConnected() {
+            LOG.debug("onConnected()");
+        }
+
+        @Override
+        public void onDisconnected() {
+            LOG.debug("onDisconnected()");
+        }
+
+        @Override
+        public void onPublish(UTF8Buffer topic, Buffer payload, Runnable ack) {
+            LOG.debug("onPublish(...)");
+            LOG.info("topic=["+new String(topic.getData())+"]");
+            LOG.info("payload=[" + new String(payload.toByteArray()) + "]");
+            ack.run();
+        }
+
+        @Override
+        public void onFailure(Throwable throwable) {
+            LOG.error("onFailure("+throwable.getClass().getSimpleName()+")",throwable);
+        }
+    }
+
+    class TestConnectionCallback implements Callback<Void> {
+
+        private Logger LOG = Logger.getLogger(TestConnectionCallback.class);
+
+        private CallbackConnection connection;
+
+        TestConnectionCallback(CallbackConnection connection) {
+            this.connection = connection;
+        }
+
+        @Override
+        public void onSuccess(Void aVoid) {
+            Topic[] topics = { new Topic("TT", QoS.AT_LEAST_ONCE)};
+            connection.subscribe(topics, new Callback<byte[]>() {
+                @Override
+                public void onSuccess(byte[] bytes) {
+                    LOG.info("Successfully subscribed to topics");
+                }
+
+                @Override
+                public void onFailure(Throwable throwable) {
+                    LOG.error("Subscription failed:" + throwable.getClass().getSimpleName(), throwable);
+                }
+            });
+        }
+
+        @Override
+        public void onFailure(Throwable throwable) {
+            LOG.error("onFailure("+throwable.getClass().getSimpleName()+")", throwable);
+        }
     }
 
     /**

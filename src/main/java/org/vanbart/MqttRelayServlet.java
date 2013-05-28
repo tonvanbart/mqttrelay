@@ -2,6 +2,7 @@ package org.vanbart;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -36,7 +37,7 @@ public class MqttRelayServlet extends WebSocketServlet {
     /** server name we listen to, see web.xml init-param 'host'*/
     private String mqttHost;
     /** topic name to listen to, see web.xml init-param 'topic'*/
-    private String mqttTopic;
+    private String[] mqttTopic;
 
     private MQTT mqtt;
 
@@ -44,7 +45,8 @@ public class MqttRelayServlet extends WebSocketServlet {
     public void init() throws ServletException {
         super.init();
         LOGGER.debug("init");
-        mqttTopic = getInitParam("topic","TT");
+        String topics = getInitParam("topic","TT");
+        mqttTopic = topics.split(",");
         mqttHost = getInitParam("host", "localhost");
         mqtt = new MQTT();
         try {
@@ -143,11 +145,11 @@ public class MqttRelayServlet extends WebSocketServlet {
 
         @Override
         public void onSuccess(Void aVoid) {
-            Topic[] topics = { new Topic(mqttTopic, QoS.AT_LEAST_ONCE)};
+            Topic[] topics = createTopics(mqttTopic);
             connection.subscribe(topics, new Callback<byte[]>() {
                 @Override
                 public void onSuccess(byte[] bytes) {
-                    LOG.info("Successfully subscribed to topic "+mqttTopic);
+                    LOG.info("Successfully subscribed to topics.");
                 }
 
                 @Override
@@ -160,6 +162,15 @@ public class MqttRelayServlet extends WebSocketServlet {
         @Override
         public void onFailure(Throwable throwable) {
             LOG.error("onFailure("+throwable.getClass().getSimpleName()+")", throwable);
+        }
+
+        private Topic[] createTopics(String[] topicNames) {
+            ArrayList<Topic> topics = new ArrayList<Topic>();
+            for (String name : topicNames) {
+                LOG.debug("adding topic for: "+name);
+                topics.add(new Topic(name, QoS.AT_LEAST_ONCE));
+            }
+            return topics.toArray(new Topic[0]);
         }
     }
 

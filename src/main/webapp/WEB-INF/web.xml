@@ -14,9 +14,9 @@
             <param-value>localhost</param-value>
         </init-param>
         <init-param>
-            <description>Name of the MQTT topic to listen on</description>
+            <description>Comma separated list of names of MQTT topics to listen on</description>
             <param-name>topic</param-name>
-            <param-value>TT</param-value>
+            <param-value>TT,XX</param-value>
         </init-param>
         <load-on-startup>0</load-on-startup>
     </servlet>

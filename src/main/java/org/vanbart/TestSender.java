@@ -34,7 +34,6 @@ public class TestSender {
         connection.connect();
         LOG.info("publishing");
         connection.publish("TT", "From TestSender".getBytes(),QoS.AT_LEAST_ONCE,false);
-        connection.disconnect();
         LOG.info("Published.");
         connection.disconnect();
     }

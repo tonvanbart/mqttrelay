@@ -11,7 +11,7 @@
     <description>Relay servlet to forward MQTT messages over WebSocket</description>
 
     <properties>
-        <jettyversion>9.2.28.v20190418</jettyversion>
+        <jettyversion>9.3.24.v20180605</jettyversion>
         <jettysocketversion>8.1.10.v20130312</jettysocketversion>
         <mqttversion>1.4</mqttversion>
     </properties>

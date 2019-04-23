@@ -11,7 +11,8 @@
     <description>Relay servlet to forward MQTT messages over WebSocket</description>
 
     <properties>
-        <jettyversion>8.1.10.v20130312</jettyversion>
+        <jettyversion>9.2.28.v20190418</jettyversion>
+        <jettysocketversion>8.1.10.v20130312</jettysocketversion>
         <mqttversion>1.4</mqttversion>
     </properties>
 
@@ -24,7 +25,7 @@
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-websocket</artifactId>
-            <version>${jettyversion}</version>
+            <version>${jettysocketversion}</version>
         </dependency>
         <dependency>
             <groupId>org.fusesource.mqtt-client</groupId>

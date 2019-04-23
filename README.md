@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/tonvanbart/mqttrelay.svg?branch=master)](https://travis-ci.com/tonvanbart/mqttrelay)
+
 Experimental servlet which connects to a MQTT topic, and forwards any messages it receives over WebSocket.
 
 ### Status
